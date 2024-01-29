@@ -1,0 +1,17 @@
+{
+  "name": "lab2_mocha_test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "calculator.js",
+  "scripts": {
+    "test": "mocha test/calculator.js"
+  },
+  "keywords": [],
+  "author": "Matt Price",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "chai": "^5.0.3",
+    "mocha": "^10.2.0"
+  }
+}
