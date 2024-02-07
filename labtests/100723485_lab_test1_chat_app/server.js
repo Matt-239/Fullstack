@@ -21,6 +21,7 @@ mongoose.connect(dbURI, {
 .then(() => console.log('Connected to MongoDB'))
 .catch(err => console.error('Error connecting to MongoDB:', err));
 
+const PrivateMessage = require('./models/private_message');
 const User = require('./models/user');
 const Room = require('./models/room');
 const Message = require('./models/message');
@@ -28,6 +29,7 @@ const Message = require('./models/message');
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
+let socket;
 
 function verifyToken(req, res, next) {
   const token = req.headers['authorization'];
@@ -39,8 +41,7 @@ function verifyToken(req, res, next) {
     if (err) {
       return res.status(500).send({ auth: false, message: 'Failed to authenticate token.' });
     }
-
-    // If token is valid, save decoded user information in request object
+    req.username = decoded.username;
     req.userId = decoded.id;
     next();
   });
@@ -48,26 +49,6 @@ function verifyToken(req, res, next) {
 
 
 app.get('/', (req, res) => {
-    // test to see if database is connected
-    // Room.find()
-    // .then(rooms => {
-    //     console.log('Rooms:', rooms);
-    // })
-    // .catch(err => console.error('Error getting rooms:', err));
-
-    // User.find()
-    // .then(users => {
-    //     console.log('Users:', users);
-    // })
-    // .catch(err => console.error('Error getting users:', err));
-
-    // Message.find()
-    // .then(messages => {
-    //     console.log('Messages:', messages);
-    // })
-    // .catch(err => console.error('Error getting messages:', err));
-
-    
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -133,24 +114,58 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
+app.get('/rooms', (req, res) => {
+    const rooms = Room.find()
+    .then(rooms => {
+        res.send(rooms);
+    })
+    .catch(err => console.error('Error getting rooms:', err));
+});
+
 app.get('/rooms-list', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'rooms-list.html'));
 });
 
-app.get('/test', (req, res) => {
+app.get('/room/:roomname', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'chat.html'));
 });
 
+app.post('/room', (req, res) => {
+    const { roomName } = req.body;
+    console.log('Room name:', roomName);
+    socket.join(roomName); 
+    res.redirect('/room/' + roomName);
+});
 
-io.on('connection', (socket) => {
-    console.log('New user connected', socket.id);
-    // socket.send('Welcome to the chat app');
-    socket.emit('message', 'Welcome to the chat app');
+io.on('connection', (sock) => {
+    socket = sock;
+    console.log('User connected');
+    
+    socket.on('joinRoom', (roomName) => {
+        socket.join(roomName); // Join the room
+        console.log(`User joined ${roomName}`);
+        socket.to(roomName).emit('message', 'User has joined ' + roomName);
+    });
 
-    // get message information from client
     socket.on('message', (msg) => {
-        console.log(msg);
-        io.emit('message', msg.username + ": " + msg.message);
+        console.log(msg.room);
+        io.to(msg.room).emit('message', msg.username + ": " + msg.message);
+        const newMessage = new Message({
+            from_user: msg.username,
+            room: msg.room,
+            message: msg.message
+        });
+        newMessage.save()
+            .then(() => {
+                console.log('Message saved');
+            })
+            .catch(err => {
+                console.error('Error saving message:', err);
+            });
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected');
     });
 });
 

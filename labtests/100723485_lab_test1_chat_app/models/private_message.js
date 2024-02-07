@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const messageSchema = new mongoose.Schema({
+const privateMessageSchema = new mongoose.Schema({
     from_user: { type: String, required: true },
     to_user: { type: String, required: true },
     room: { type: String, required: true },
@@ -8,6 +8,6 @@ const messageSchema = new mongoose.Schema({
     date_sent: { type: Date, default: Date.now }
 });
 
-const Message = mongoose.model('Message', messageSchema);
+const Message = mongoose.model('Private_Message', privateMessageSchema);
 
 module.exports = Message;
