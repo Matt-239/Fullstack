@@ -2,11 +2,13 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 // const axios = require('axios');
+const jwt = require('jsonwebtoken');
 const path = require('path');
 const mongoose = require('mongoose'); 
 
 
 const app = express();
+const secretKey = 'secretKey';
 const server = http.createServer(app);
 const io = socketIo(server);
 
@@ -26,25 +28,44 @@ const Message = require('./models/message');
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
+
+function verifyToken(req, res, next) {
+  const token = req.headers['authorization'];
+  if (!token) {
+    return res.status(401).send({ auth: false, message: 'No token provided.' });
+  }
+
+  jwt.verify(token, secretKey, (err, decoded) => {
+    if (err) {
+      return res.status(500).send({ auth: false, message: 'Failed to authenticate token.' });
+    }
+
+    // If token is valid, save decoded user information in request object
+    req.userId = decoded.id;
+    next();
+  });
+}
+
+
 app.get('/', (req, res) => {
     // test to see if database is connected
-    Room.find()
-    .then(rooms => {
-        console.log('Rooms:', rooms);
-    })
-    .catch(err => console.error('Error getting rooms:', err));
+    // Room.find()
+    // .then(rooms => {
+    //     console.log('Rooms:', rooms);
+    // })
+    // .catch(err => console.error('Error getting rooms:', err));
 
-    User.find()
-    .then(users => {
-        console.log('Users:', users);
-    })
-    .catch(err => console.error('Error getting users:', err));
+    // User.find()
+    // .then(users => {
+    //     console.log('Users:', users);
+    // })
+    // .catch(err => console.error('Error getting users:', err));
 
-    Message.find()
-    .then(messages => {
-        console.log('Messages:', messages);
-    })
-    .catch(err => console.error('Error getting messages:', err));
+    // Message.find()
+    // .then(messages => {
+    //     console.log('Messages:', messages);
+    // })
+    // .catch(err => console.error('Error getting messages:', err));
 
     
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -90,61 +111,40 @@ app.get('/login', (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-    const { username, password } = req.body;
+  const { username, password } = req.body;
 
-    try {
-        const user = await User.findOne({
-            username: username,
-            password: password
-        });
-        if (!user) {
-            return res.status(400).send('Invalid username or password');
-        }
-
-        res.status(200).send('Login successful');
-    } catch (err) {
-        console.error('Error logging in:', err);
-        res.status(500).send('Error logging in');
+  try {
+    const user = await User.findOne({ username: username, password: password });
+    if (!user) {
+      return res.status(400).send('Invalid username or password');
     }
+
+    const token = jwt.sign({ id: user._id }, secretKey, { expiresIn: 3600 }); // Expires in 1 hour
+    res.redirect('/rooms-list');
+
+  } catch (err) {
+    console.error('Error logging in:', err);
+    res.status(500).send('Error logging in');
+  }
 });
 
-app.get('/rooms', (req, res) => {
-    Room.find()
-    .then(rooms => {
-        res.json(rooms);
-    })
-    .catch(err => {
-        console.error('Error getting rooms:', err);
-        res.status(500).send('Error getting rooms');
-    });
+app.get('/logout', (req, res) => {
+    res.clearCookie('token');
+    res.redirect('/');
 });
 
 app.get('/rooms-list', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'rooms-list.html'));
 });
 
+app.get('/test', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'chat.html'));
+});
 
 
 io.on('connection', (socket) => {
-    console.log('New client connected');
-    socket.join('general');
-    socket.on('disconnect', () => {
-        console.log('Client disconnected');
-    });
-    socket.on('new_message', (data) => {
-        console.log('New message:', data);
-        const newMessage = new Message({
-            from_user: data.from_user,
-            room: data.room,
-            message: data.message
-        });
-        newMessage.save()
-        .then(() => {
-            console.log('Message saved');
-            io.emit('new_message', data);
-        })
-        .catch(err => console.error('Error saving message:', err));
-    });
+    console.log('New user connected', socket.id);
+    socket.send('Welcome to the chat app');
 });
 
 
