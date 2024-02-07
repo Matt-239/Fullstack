@@ -144,7 +144,14 @@ app.get('/test', (req, res) => {
 
 io.on('connection', (socket) => {
     console.log('New user connected', socket.id);
-    socket.send('Welcome to the chat app');
+    // socket.send('Welcome to the chat app');
+    socket.emit('message', 'Welcome to the chat app');
+
+    // get message information from client
+    socket.on('message', (msg) => {
+        console.log(msg);
+        io.emit('message', msg.username + ": " + msg.message);
+    });
 });
 
 
