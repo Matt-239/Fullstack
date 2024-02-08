@@ -6,12 +6,22 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const mongoose = require('mongoose'); 
 
-
 const app = express();
 const secretKey = 'secretKey';
 const server = http.createServer(app);
 const io = socketIo(server);
 
+let socket;
+
+function joinRoom(roomName) {
+    if (socket) {
+        socket.join(roomName);
+        console.log(`User joined ${roomName}`);
+        socket.to(roomName).emit('message', 'User has joined ' + roomName);
+    } else {
+        console.error('Socket is not initialized');
+    }
+}
 
 dbURI = "mongodb+srv://mprice239:FbaMOio4rVkizpRJ@cluster0.cbbhvr6.mongodb.net/Chat?retryWrites=true&w=majority";
 mongoose.connect(dbURI, {
@@ -29,24 +39,21 @@ const Message = require('./models/message');
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-let socket;
-
 function verifyToken(req, res, next) {
-  const token = req.headers['authorization'];
-  if (!token) {
-    return res.status(401).send({ auth: false, message: 'No token provided.' });
-  }
-
-  jwt.verify(token, secretKey, (err, decoded) => {
-    if (err) {
-      return res.status(500).send({ auth: false, message: 'Failed to authenticate token.' });
+    const token = req.headers['authorization'];
+    if (!token) {
+        return res.status(401).send({ auth: false, message: 'No token provided.' });
     }
-    req.username = decoded.username;
-    req.userId = decoded.id;
-    next();
-  });
-}
 
+    jwt.verify(token, secretKey, (err, decoded) => {
+        if (err) {
+            return res.status(500).send({ auth: false, message: 'Failed to authenticate token.' });
+        }
+        req.username = decoded.username;
+        req.userId = decoded.id;
+        next();
+    });
+}
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -59,22 +66,18 @@ app.get('/signup', (req, res) => {
 app.post('/signup', async (req, res) => {
     const { username, password, first_name, last_name } = req.body;
     try {
-        const existing = await User.findOne({
-            username: username
-        });
-        console.log('Existing:', existing);
+        const existing = await User.findOne({ username: username });
         if (existing) {
             return res.status(400).send('Username already exists');
         }
 
-        console.log('Creating new user');
         const newUser = new User({
             username: username,
             password: password,
             firstname: first_name,
             lastname: last_name
         });
-        console.log('New user:', newUser);
+
         newUser.save()
         .then(() => {
             console.log('User saved');
@@ -92,21 +95,21 @@ app.get('/login', (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+    const { username, password } = req.body;
 
-  try {
-    const user = await User.findOne({ username: username, password: password });
-    if (!user) {
-      return res.status(400).send('Invalid username or password');
+    try {
+        const user = await User.findOne({ username: username, password: password });
+        if (!user) {
+            return res.status(400).send('Invalid username or password');
+        }
+
+        const token = jwt.sign({ id: user._id }, secretKey, { expiresIn: 3600 }); // Expires in 1 hour
+        res.redirect('/rooms-list');
+
+    } catch (err) {
+        console.error('Error logging in:', err);
+        res.status(500).send('Error logging in');
     }
-
-    const token = jwt.sign({ id: user._id }, secretKey, { expiresIn: 3600 }); // Expires in 1 hour
-    res.redirect('/rooms-list');
-
-  } catch (err) {
-    console.error('Error logging in:', err);
-    res.status(500).send('Error logging in');
-  }
 });
 
 app.get('/logout', (req, res) => {
@@ -133,7 +136,7 @@ app.get('/room/:roomname', (req, res) => {
 app.post('/room', (req, res) => {
     const { roomName } = req.body;
     console.log('Room name:', roomName);
-    socket.join(roomName); 
+    joinRoom(roomName);
     res.redirect('/room/' + roomName);
 });
 
@@ -142,14 +145,13 @@ io.on('connection', (sock) => {
     console.log('User connected');
     
     socket.on('joinRoom', (roomName) => {
-        socket.join(roomName); // Join the room
-        console.log(`User joined ${roomName}`);
-        socket.to(roomName).emit('message', 'User has joined ' + roomName);
+        joinRoom(roomName);
     });
 
     socket.on('message', (msg) => {
         console.log(msg.room);
         io.to(msg.room).emit('message', msg.username + ": " + msg.message);
+
         const newMessage = new Message({
             from_user: msg.username,
             room: msg.room,
@@ -168,9 +170,6 @@ io.on('connection', (sock) => {
         console.log('User disconnected');
     });
 });
-
-
-
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
