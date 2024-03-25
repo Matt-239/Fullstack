@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rooms List</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+
+    <div class="container mt-5">
+        <h2>Rooms List</h2>
+        <form id="room-form" action="/room" method="POST">
+            <select id="rooms-list" class="form-control">
+                <!-- Options will be dynamically added here -->
+            </select>
+            <!-- Hidden input field to hold the selected room name -->
+            <input type="hidden" id="selected-room" name="roomName">
+            <button type="submit" class="btn btn-primary mt-3">Join</button>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            fetch('/rooms')
+                .then(response => response.json())
+                .then(rooms => {
+                    const roomsList = document.getElementById('rooms-list');
+                    rooms.forEach(room => {
+                        const option = document.createElement('option');
+                        option.value = room.name;
+                        option.textContent = room.name;
+                        roomsList.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching rooms:', error);
+                    const errorMessage = document.createElement('p');
+                    errorMessage.textContent = 'Error fetching rooms. Please try again later.';
+                    document.body.appendChild(errorMessage);
+                });
+
+            const roomForm = document.getElementById('room-form');
+            roomForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                const selectedRoom = document.getElementById('rooms-list').value;
+                if (selectedRoom) {
+                    document.getElementById('selected-room').value = selectedRoom;
+                    this.submit();
+                } else {
+                    alert('Please select a room to join.');
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
